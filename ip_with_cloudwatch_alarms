@@ -1,0 +1,58 @@
+import boto3
+
+def get_free_ips(subnet_id):
+    ec2 = boto3.client('ec2')
+    response = ec2.describe_subnets(SubnetIds=[subnet_id])
+    subnet = response['Subnets'][0]
+    available_ips = subnet['AvailableIpAddressCount']
+    return available_ips
+
+def create_cloudwatch_alarm(subnet_id):
+    cloudwatch = boto3.client('cloudwatch')
+    alarm_name = f'{subnet_id}_low_ip_alarm'
+    alarm_description = f'Low IP count alarm for subnet {subnet_id}'
+    alarm_actions = ['<YOUR_SNS_TOPIC_ARN>']  # Replace with your desired SNS topic ARN
+    alarm = {
+        'AlarmName': alarm_name,
+        'AlarmDescription': alarm_description,
+        'MetricName': 'FreeIPCount',
+        'Namespace': 'AWS/EC2',
+        'Statistic': 'Minimum',
+        'Dimensions': [
+            {
+                'Name': 'SubnetId',
+                'Value': subnet_id
+            }
+        ],
+        'Period': 300,  # 5 minutes
+        'EvaluationPeriods': 1,
+        'Threshold': 10,
+        'ComparisonOperator': 'LessThanThreshold',
+        'AlarmActions': alarm_actions
+    }
+    response = cloudwatch.put_metric_alarm(**alarm)
+    return response
+
+def main():
+    ec2 = boto3.client('ec2')
+    response = ec2.describe_vpcs()
+    vpcs = response['Vpcs']
+    
+    for vpc in vpcs:
+        vpc_id = vpc['VpcId']
+        response = ec2.describe_subnets(Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}])
+        subnets = response['Subnets']
+        
+        for subnet in subnets:
+            subnet_id = subnet['SubnetId']
+            free_ips = get_free_ips(subnet_id)
+            
+            if free_ips < 10:
+                print(f"Creating CloudWatch alarm for subnet {subnet_id}")
+                create_cloudwatch_alarm(subnet_id)
+            
+            print(f"Subnet {subnet_id} has {free_ips} free IPs.")
+            
+
+if __name__ == '__main__':
+    main()
