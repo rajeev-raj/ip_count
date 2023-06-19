@@ -1,0 +1,38 @@
+import boto3
+import json
+
+def get_available_ip_addresses():
+    ec2 = boto3.client('ec2')
+
+    results = []
+
+    # Create a paginator for describing subnets
+    paginator = ec2.get_paginator('describe_subnets')
+
+    # Paginate through the subnets
+    for page in paginator.paginate():
+        subnets = page['Subnets']
+
+        # Iterate through each subnet
+        for subnet in subnets:
+            subnet_id = subnet['SubnetId']
+
+            # Retrieve the available IP addresses for the subnet
+            response = ec2.describe_subnet(SubnetIds=[subnet_id])
+            available_ips = response['Subnets'][0]['AvailableIpAddressCount']
+
+            # Check if available IPs are less than 10
+            if available_ips < 10:
+                result = {
+                    'vpc_id': subnet['VpcId'],
+                    'subnet_id': subnet_id,
+                    'available_count': available_ips
+                }
+                results.append(result)
+
+    # Convert results to JSON
+    json_output = json.dumps(results, indent=4)
+    print(json_output)
+
+# Call the function to get the available IP addresses less than 10 in JSON format
+get_available_ip_addresses()
